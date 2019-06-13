@@ -43,7 +43,7 @@ class IOHandlerTipsyBinary(IOHandlerSPH):
     _ptypes = ("Gas",
                "DarkMatter",
                "Stars")
-    _chunksize = 64 * 64 * 64
+    _chunksize = CHUNKSIZE
 
     _aux_fields = None
     _fields = (("Gas", "Mass"),

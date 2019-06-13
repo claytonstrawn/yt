@@ -31,7 +31,7 @@ from yt.geometry.particle_oct_container import ParticleBitmap
 from yt.data_objects.particle_container import ParticleContainer
 from yt.utilities.lib.fnv_hash import fnv_hash
 
-CHUNKSIZE = 64**3
+CHUNKSIZE = 256**3
 
 class ParticleIndex(Index):
     """The Index subclass for particle datasets"""
