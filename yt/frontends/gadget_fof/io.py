@@ -1,19 +1,3 @@
-"""
-GadgetFOF data-file handling function
-
-
-
-
-"""
-
-#-----------------------------------------------------------------------------
-# Copyright (c) 2013, yt Development Team.
-#
-# Distributed under the terms of the Modified BSD License.
-#
-# The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
-
 from collections import defaultdict
 from yt.utilities.on_demand_imports import _h5py as h5py
 import numpy as np
@@ -60,7 +44,7 @@ class IOHandlerGadgetFOFHDF5(BaseIOHandler):
             for ptype in sorted(ptypes):
                 pcount = data_file.total_particles[ptype]
                 if pcount == 0: continue
-                coords = f[ptype]["%sPos" % ptype].value.astype("float64")
+                coords = f[ptype]["%sPos" % ptype][()].astype("float64")
                 coords = np.resize(coords, (pcount, 3))
                 yield ptype, coords
 

@@ -1,19 +1,3 @@
-"""
-Gadget frontend tests
-
-
-
-
-"""
-
-#-----------------------------------------------------------------------------
-# Copyright (c) 2015, yt Development Team.
-#
-# Distributed under the terms of the Modified BSD License.
-#
-# The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
-
 from collections import OrderedDict
 from itertools import product
 import os
@@ -50,10 +34,6 @@ iso_fields = OrderedDict(
         (("gas", "temperature"), None),
         (("gas", "temperature"), ('gas', 'density')),
         (('gas', 'velocity_magnitude'), None),
-        (("deposit", "all_density"), None),
-        (("deposit", "all_count"), None),
-        (("deposit", "all_cic"), None),
-        (("deposit", "PartType0_density"), None),
     ]
 )
 iso_kwargs = dict(bounding_box=[[-3, 3], [-3, 3], [-3, 3]])

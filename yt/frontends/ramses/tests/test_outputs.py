@@ -1,19 +1,3 @@
-"""
-RAMSES frontend tests
-
-
-
-
-"""
-
-#-----------------------------------------------------------------------------
-# Copyright (c) 2013, yt Development Team.
-#
-# Distributed under the terms of the Modified BSD License.
-#
-# The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
-
 from yt.testing import \
     assert_equal, \
     requires_file, \
@@ -31,8 +15,7 @@ import os
 import yt
 import numpy as np
 
-_fields = ("temperature", "density", "velocity_magnitude",
-           ("deposit", "all_density"), ("deposit", "all_count"))
+_fields = ("temperature", "density", "velocity_magnitude")
 
 output_00080 = "output_00080/info_00080.txt"
 @requires_ds(output_00080)
