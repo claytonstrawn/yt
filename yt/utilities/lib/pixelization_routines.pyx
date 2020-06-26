@@ -5,13 +5,6 @@ Pixelization routines
 
 """
 
-#-----------------------------------------------------------------------------
-# Copyright (c) 2013, yt Development Team.
-#
-# Distributed under the terms of the Modified BSD License.
-#
-# The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
 
 import numpy as np
 cimport numpy as np
@@ -756,6 +749,7 @@ def pixelize_element_mesh(np.ndarray[np.float64_t, ndim=2] coords,
                           int index_offset = 0):
     cdef np.ndarray[np.float64_t, ndim=3] img
     img = np.zeros(buff_size, dtype="float64")
+    img[:] = np.nan
     # Two steps:
     #  1. Is image point within the mesh bounding box?
     #  2. Is image point within the mesh element?

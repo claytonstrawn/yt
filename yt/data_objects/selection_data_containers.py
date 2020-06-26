@@ -27,7 +27,8 @@ from yt.units.yt_array import \
 from yt.utilities.exceptions import \
     YTSphereTooSmall, \
     YTIllDefinedCutRegion, \
-    YTEllipsoidOrdering
+    YTEllipsoidOrdering, \
+    YTException
 from yt.utilities.lib.pixelization_routines import \
     SPHKernelInterpolationTable
 from yt.utilities.minimal_representation import \
@@ -35,7 +36,7 @@ from yt.utilities.minimal_representation import \
 from yt.utilities.math_utils import get_rotation_matrix
 from yt.utilities.orientation import Orientation
 from yt.geometry.selection_routines import points_in_cells
-from yt.utilities.on_demand_imports import _scipy
+from yt.utilities.on_demand_imports import _scipy, _miniball
 
 
 class YTPoint(YTSelectionContainer0D):
@@ -114,7 +115,7 @@ class YTOrthoRay(YTSelectionContainer1D):
     >>> import yt
     >>> ds = yt.load("RedshiftOutput0005")
     >>> oray = ds.ortho_ray(0, (0.2, 0.74))
-    >>> print oray["Density"]
+    >>> print(oray["Density"])
 
     Note: The low-level data representation for rays are not guaranteed to be 
     spatially ordered.  In particular, with AMR datasets, higher resolution 
@@ -196,7 +197,7 @@ class YTRay(YTSelectionContainer1D):
     >>> import yt
     >>> ds = yt.load("RedshiftOutput0005")
     >>> ray = ds.ray((0.2, 0.74, 0.11), (0.4, 0.91, 0.31))
-    >>> print ray["Density"], ray["t"], ray["dts"]
+    >>> print(ray["Density"], ray["t"], ray["dts"])
 
     Note: The low-level data representation for rays are not guaranteed to be 
     spatially ordered.  In particular, with AMR datasets, higher resolution 
@@ -322,7 +323,7 @@ class YTSlice(YTSelectionContainer2D):
     >>> import yt
     >>> ds = yt.load("RedshiftOutput0005")
     >>> slice = ds.slice(0, 0.25)
-    >>> print slice["Density"]
+    >>> print(slice["Density"])
     """
     _top_node = "/Slices"
     _type_name = "slice"
@@ -445,7 +446,7 @@ class YTCuttingPlane(YTSelectionContainer2D):
     >>> import yt
     >>> ds = yt.load("RedshiftOutput0005")
     >>> cp = ds.cutting([0.1, 0.2, -0.9], [0.5, 0.42, 0.6])
-    >>> print cp["Density"]
+    >>> print(cp["Density"])
     """
     _plane = None
     _top_node = "/CuttingPlanes"
@@ -800,6 +801,47 @@ class YTSphere(YTSelectionContainer3D):
         """
         return -self.radius + self.center, self.radius + self.center
 
+class YTMinimalSphere(YTSelectionContainer3D):
+    """
+    Build the smallest sphere that encompasses a set of points.
+
+    Parameters
+    ----------
+    points : YTArray
+        The points that the sphere will contain.
+
+    Examples
+    --------
+
+    >>> import yt
+    >>> ds = yt.load("output_00080/info_00080.txt")
+    >>> points = ds.r['particle_position']
+    >>> sphere = ds.minimal_sphere(points)
+    """
+    _type_name = "sphere"
+    _override_selector_name = "minimal_sphere"
+    _con_args = ('center', 'radius')
+
+    def __init__(self, points, ds=None, field_parameters=None, data_source=None):
+        validate_object(ds, Dataset)
+        validate_object(field_parameters, dict)
+        validate_object(data_source, YTSelectionContainer)
+        validate_object(points, YTArray)
+
+        points = fix_length(points, ds)
+        if len(points) < 2:
+            raise YTException("Not enough points. Expected at least 2, got %s" % len(points))
+        mylog.debug('Building minimal sphere around points.')
+        mb = _miniball.Miniball(points)
+        if not mb.is_valid():
+            raise YTException("Could not build valid sphere around points.")
+
+        center = ds.arr(mb.center(), points.units)
+        radius = ds.quan(np.sqrt(mb.squared_radius()), points.units)
+        super(YTMinimalSphere, self).__init__(center, ds, field_parameters, data_source)
+        self.set_field_parameter('radius', radius)
+        self.set_field_parameter("center", self.center)
+        self.radius = radius
 
 class YTEllipsoid(YTSelectionContainer3D):
     """
@@ -926,7 +968,7 @@ class YTCutRegion(YTSelectionContainer3D):
     _type_name = "cut_region"
     _con_args = ("base_object", "conditionals")
     def __init__(self, data_source, conditionals, ds=None,
-                 field_parameters=None, base_object=None):
+                 field_parameters=None, base_object=None,locals={}):
         validate_object(data_source, YTSelectionContainer)
         validate_iterable(conditionals)
         for condition in conditionals:
@@ -945,6 +987,7 @@ class YTCutRegion(YTSelectionContainer3D):
             data_source.center, ds, field_parameters, data_source=data_source)
         self.conditionals = ensure_list(conditionals)
         self.base_object = data_source
+        self.locals = locals
         self._selector = None
         # Need to interpose for __getitem__, fwidth, fcoords, icoords, iwidth,
         # ires and get_data
@@ -990,9 +1033,13 @@ class YTCutRegion(YTSelectionContainer3D):
     def _cond_ind(self):
         ind = None
         obj = self.base_object
+        locals = self.locals.copy()
+        if 'obj' in locals:
+            raise RuntimeError('"obj" has been defined in the "locals" ; this is not supported, please rename the variable.')
+        locals['obj'] = obj
         with obj._field_parameter_state(self.field_parameters):
             for cond in self.conditionals:
-                res = eval(cond)
+                res = eval(cond, locals)
                 if ind is None: ind = res
                 if ind.shape != res.shape:
                     raise YTIllDefinedCutRegion(self.conditionals)

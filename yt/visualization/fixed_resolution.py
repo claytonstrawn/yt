@@ -60,9 +60,9 @@ class FixedResolutionBuffer(object):
     >>> proj = ds.proj(0, "density")
     >>> frb1 = FixedResolutionBuffer(proj, (0.2, 0.3, 0.4, 0.5),
     ...                              (1024, 1024))
-    >>> print frb1["density"].max()
+    >>> print(frb1["density"].max())
     1.0914e-9 g/cm**3
-    >>> print frb1["temperature"].max()
+    >>> print(frb1["temperature"].max())
     104923.1 K
     """
     _exclude_fields = ('pz','pdz','dx','x','y','z',
@@ -293,7 +293,8 @@ class FixedResolutionBuffer(object):
 
     def to_fits_data(self, fields=None, other_keys=None, length_unit=None,
                      **kwargs):
-        r"""Export a set of pixelized fields to a FITS file.
+        r"""Export the fields in this FixedResolutionBuffer instance 
+        to a FITSImageData instance.
 
         This will export a set of FITS images of either the fields specified
         or all the fields already in the object.

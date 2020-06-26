@@ -63,7 +63,11 @@ def sanitize_weight_field(ds, field, weight):
     field_object = ds._get_field_info(field)
     if weight is None:
         if field_object.sampling_type == "particle":
-            weight_field = (field_object.name[0], 'particle_ones')
+            if field_object.name[0] == "gas":
+                ptype = ds._sph_ptypes[0]
+            else:
+                ptype = field_object.name[0]
+            weight_field = (ptype, 'particle_ones')
         else:
             weight_field = ('index', 'ones')
     else:
@@ -74,7 +78,8 @@ class RegisteredDataContainer(type):
     def __init__(cls, name, b, d):
         type.__init__(cls, name, b, d)
         if hasattr(cls, "_type_name") and not cls._skip_add:
-            data_object_registry[cls._type_name] = cls
+            name = getattr(cls, "_override_selector_name", cls._type_name)
+            data_object_registry[name] = cls
 
 class YTDataContainer(metaclass = RegisteredDataContainer):
     """
@@ -1116,9 +1121,9 @@ class YTDataContainer(metaclass = RegisteredDataContainer):
         >>> sp = ds.sphere("c", 0.1)
         >>> sp_clone = sp.clone()
         >>> sp["density"]
-        >>> print sp.field_data.keys()
+        >>> print(sp.field_data.keys())
         [("gas", "density")]
-        >>> print sp_clone.field_data.keys()
+        >>> print(sp_clone.field_data.keys())
         []
         """
         args = self.__reduce__()
@@ -1810,7 +1815,7 @@ class YTSelectionContainer3D(YTSelectionContainer):
         self.coords = None
         self._grids = None
 
-    def cut_region(self, field_cuts, field_parameters=None):
+    def cut_region(self, field_cuts, field_parameters=None,locals={}):
         """
         Return a YTCutRegion, where the a cell is identified as being inside
         the cut region based on the value of one or more fields.  Note that in
@@ -1837,10 +1842,10 @@ class YTSelectionContainer3D(YTSelectionContainer):
         >>> ds = yt.load("RedshiftOutput0005")
         >>> ad = ds.all_data()
         >>> cr = ad.cut_region(["obj['temperature'] > 1e6"])
-        >>> print cr.quantities.total_quantity("cell_mass").in_units('Msun')
+        >>> print(cr.quantities.total_quantity("cell_mass").in_units('Msun'))
         """
         cr = self.ds.cut_region(self, field_cuts,
-                                field_parameters=field_parameters)
+                                field_parameters=field_parameters,locals=locals)
         return cr
 
     def extract_isocontours(self, field, value, filename = None,

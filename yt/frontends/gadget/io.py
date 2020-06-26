@@ -46,12 +46,11 @@ class IOHandlerGadgetHDF5(IOHandlerSPH):
             for ptype, field_list in sorted(ptf.items()):
                 if data_file.total_particles[ptype] == 0:
                     continue
-                x = f["/%s/Coordinates" % ptype][si:ei, 0].astype("float64")
-                y = f["/%s/Coordinates" % ptype][si:ei, 1].astype("float64")
-                z = f["/%s/Coordinates" % ptype][si:ei, 2].astype("float64")
+                c = f["/%s/Coordinates" % ptype][si:ei, :].astype("float64")
+                x, y, z = (np.squeeze(_) for _ in np.split(c, 3, axis=1))
                 if ptype == self.ds._sph_ptypes[0]:
-                    pdtype = f["/%s/Coordinates" % ptype].dtype
-                    pshape = f["/%s/Coordinates" % ptype].shape
+                    pdtype = c.dtype
+                    pshape = c.shape
                     hsml = self._get_smoothing_length(data_file, pdtype, pshape)
                 else:
                     hsml = 0.0
@@ -112,7 +111,7 @@ class IOHandlerGadgetHDF5(IOHandlerSPH):
                 g = f["/%s" % ptype]
                 if getattr(selector, 'is_all_data', False):
                     mask = slice(None, None, None)
-                    mask_sum = ei-si
+                    mask_sum = data_file.total_particles[ptype]
                     hsmls = None
                 else:
                     coords = g["Coordinates"][si:ei].astype("float64")
@@ -142,6 +141,9 @@ class IOHandlerGadgetHDF5(IOHandlerSPH):
                     elif field.startswith("Metallicity_"):
                         col = int(field.rsplit("_", 1)[-1])
                         data = g["Metallicity"][si:ei, col][mask]
+                    elif field.startswith("GFM_Metals_"):
+                        col = int(field.rsplit("_", 1)[-1])
+                        data = g["GFM_Metals"][si:ei, col][mask]
                     elif field.startswith("Chemistry_"):
                         col = int(field.rsplit("_", 1)[-1])
                         data = g["ChemistryAbundances"][si:ei, col][mask]
@@ -206,10 +208,10 @@ class IOHandlerGadgetHDF5(IOHandlerSPH):
                     for j in gp.keys():
                         kk = j
                         fields.append((ptype, str(kk)))
-                elif k == 'Metallicity' and len(g[k].shape) > 1:
+                elif k in ['Metallicity', 'GFM_Metals'] and len(g[k].shape) > 1:
                     # Vector of metallicity
                     for i in range(g[k].shape[1]):
-                        fields.append((ptype, "Metallicity_%02i" % i))
+                        fields.append((ptype, "%s_%02i" % (k, i)))
                 elif k == "ChemistryAbundances" and len(g[k].shape) > 1:
                     for i in range(g[k].shape[1]):
                         fields.append((ptype, "Chemistry_%03i" % i))
@@ -332,7 +334,11 @@ class IOHandlerGadgetBinary(IOHandlerSPH):
                     continue
                 for field in field_list:
                     if field == "Mass" and ptype not in self.var_mass:
-                        data = np.empty(mask.sum(), dtype="float64")
+                        if getattr(selector, 'is_all_data', False):
+                            size = data_file.total_particles[ptype]
+                        else:
+                            size = mask.sum()
+                        data = np.empty(size, dtype="float64")
                         m = self.ds.parameters["Massarr"][
                             self._ptypes.index(ptype)]
                         data[:] = m

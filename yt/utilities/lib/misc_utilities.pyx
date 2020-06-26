@@ -5,13 +5,6 @@ Simple utilities that don't fit anywhere else
 
 """
 
-#-----------------------------------------------------------------------------
-# Copyright (c) 2013, yt Development Team.
-#
-# Distributed under the terms of the Modified BSD License.
-#
-# The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
 
 from yt.funcs import get_pbar
 import numpy as np
@@ -468,17 +461,17 @@ def kdtree_get_choices(np.ndarray[np.float64_t, ndim=3] data,
         for i in range(n_grids):
             # Check for disqualification
             for j in range(2):
-                #print "Checking against", i,j,dim,data[i,j,dim]
+                #print("Checking against", i,j,dim,data[i,j,dim])
                 if not (l_corner[dim] < data[i, j, dim] and
                         data[i, j, dim] < r_corner[dim]):
-                    #print "Skipping ", data[i,j,dim]
+                    #print("Skipping ", data[i,j,dim])
                     continue
                 skipit = 0
                 # Add our left ...
                 for k in range(n_unique):
                     if uniques[k] == data[i, j, dim]:
                         skipit = 1
-                        #print "Identified", uniques[k], data[i,j,dim], n_unique
+                        #print("Identified", uniques[k], data[i,j,dim], n_unique)
                         break
                 if skipit == 0:
                     uniques[n_unique] = data[i, j, dim]
@@ -490,7 +483,7 @@ def kdtree_get_choices(np.ndarray[np.float64_t, ndim=3] data,
     # I recognize how lame this is.
     cdef np.ndarray[np.float64_t, ndim=1] tarr = np.empty(my_max, dtype='float64')
     for i in range(my_max):
-        #print "Setting tarr: ", i, uniquedims[best_dim][i]
+        #print("Setting tarr: ", i, uniquedims[best_dim][i])
         tarr[i] = uniquedims[best_dim][i]
     tarr.sort()
     if my_split < 0:
@@ -568,7 +561,8 @@ def get_box_grids_below_level(
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def obtain_position_vector(data):
+def obtain_position_vector(
+    data, field_names = ('x', 'y', 'z')):
     # This is just to let the pointers exist and whatnot.  We can't cdef them
     # inside conditionals.
     cdef np.ndarray[np.float64_t, ndim=1] xf
@@ -582,14 +576,14 @@ def obtain_position_vector(data):
     cdef np.float64_t c[3]
     cdef int i, j, k
 
-    units = data['x'].units
+    units = data[field_names[0]].units
     center = data.get_field_parameter("center").to(units)
     c[0] = center[0]; c[1] = center[1]; c[2] = center[2]
-    if len(data['x'].shape) == 1:
+    if len(data[field_names[0]].shape) == 1:
         # One dimensional data
-        xf = data['x']
-        yf = data['y']
-        zf = data['z']
+        xf = data[field_names[0]]
+        yf = data[field_names[1]]
+        zf = data[field_names[2]]
         rf = YTArray(np.empty((3, xf.shape[0]), 'float64'), xf.units)
         for i in range(xf.shape[0]):
             rf[0, i] = xf[i] - c[0]
@@ -598,9 +592,9 @@ def obtain_position_vector(data):
         return rf
     else:
         # Three dimensional data
-        xg = data['x']
-        yg = data['y']
-        zg = data['z']
+        xg = data[field_names[0]]
+        yg = data[field_names[1]]
+        zg = data[field_names[2]]
         shape = (3, xg.shape[0], xg.shape[1], xg.shape[2])
         rg = YTArray(np.empty(shape, 'float64'), xg.units)
         #rg = YTArray(rg, xg.units)

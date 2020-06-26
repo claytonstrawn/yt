@@ -190,6 +190,22 @@ class cartopy_imports(object):
 
 _cartopy = cartopy_imports()
 
+class pooch_imports(object):
+    _name = "pooch"
+
+    _pooch = None
+    @property
+    def pooch(self):
+        if self._pooch is None:
+            try:
+                import pooch as pooch
+            except ImportError:
+                pooch = NotAModule(self._name)
+            self._pooch = pooch
+        return self._pooch
+
+_pooch = pooch_imports()
+
 class scipy_imports(object):
     _name = "scipy"
     _integrate = None
@@ -474,3 +490,28 @@ class yaml_imports(object):
         return self._load
 
 _yaml = yaml_imports()
+
+class NotMiniball(NotAModule):
+    def __init__(self, pkg_name):
+        super(NotMiniball, self).__init__(pkg_name)
+        str = ("This functionality requires the %s package to be installed. "
+               "Installation instructions can be found at "
+               "https://github.com/weddige/miniball or alternatively you can "
+               "install via `pip install MiniballCpp`.")
+        self.error = ImportError(str % self.pkg_name)
+
+class miniball_imports(object):
+    _name = 'miniball'
+    _Miniball = None
+
+    @property
+    def Miniball(self):
+        if self._Miniball is None:
+            try:
+                from miniball import Miniball
+            except ImportError:
+                Miniball = NotMiniball(self._name)
+            self._Miniball = Miniball
+        return self._Miniball
+
+_miniball = miniball_imports()

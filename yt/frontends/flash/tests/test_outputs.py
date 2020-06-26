@@ -2,7 +2,8 @@ import numpy as np
 from yt.testing import \
     assert_equal, \
     requires_file, \
-    units_override_check
+    units_override_check, \
+    ParticleSelectionComparison
 from yt.utilities.answer_testing.framework import \
     requires_ds, \
     small_patch_amr, \
@@ -42,6 +43,13 @@ def test_FLASHDataset():
 def test_units_override():
     units_override_check(sloshing)
 
+@requires_file(sloshing)
+def test_mu():
+    ds = data_dir_load(sloshing)
+    sp = ds.sphere("c", (0.1, "unitary"))
+    assert np.all(sp["gas","mean_molecular_weight"] == 
+                  ds.parameters["eos_singlespeciesa"])
+
 fid_1to3_b1 = "fiducial_1to3_b1/fiducial_1to3_b1_hdf5_part_0080"
 
 fid_1to3_b1_fields = OrderedDict(
@@ -59,6 +67,12 @@ fid_1to3_b1_fields = OrderedDict(
 @requires_file(fid_1to3_b1)
 def test_FLASHParticleDataset():
     assert isinstance(data_dir_load(fid_1to3_b1), FLASHParticleDataset)
+
+@requires_file(fid_1to3_b1)
+def test_FLASHParticleDataset_selection():
+    ds = data_dir_load(fid_1to3_b1)
+    psc = ParticleSelectionComparison(ds)
+    psc.run_defaults()
 
 
 dens_turb_mag = 'DensTurbMag/DensTurbMag_hdf5_plt_cnt_0015'

@@ -10,6 +10,7 @@ from yt.data_objects.static_output import \
 from yt.frontends.sph.data_structures import \
     SPHDataset, \
     SPHParticleIndex
+from yt.utilities.chemical_formulas import default_mu
 from yt.utilities.cosmology import \
     Cosmology
 from yt.utilities.fortran_utils import read_record
@@ -222,6 +223,7 @@ class GadgetDataset(SPHDataset):
                  ptype_spec = "default",
                  long_ids = False,
                  units_override=None,
+                 mean_molecular_weight=None,
                  header_offset = 0,
                  unit_system="cgs",
                  use_dark_factor = False,
@@ -269,6 +271,8 @@ class GadgetDataset(SPHDataset):
             unit_base['cmcm'] = 1.0 / unit_base["UnitLength_in_cm"]
         self._unit_base = unit_base
         if bounding_box is not None:
+            # This ensures that we know a bounding box has been applied
+            self._domain_override = True
             bbox = np.array(bounding_box, dtype="float64")
             if bbox.shape == (2, 3):
                 bbox = bbox.transpose()
@@ -300,6 +304,10 @@ class GadgetDataset(SPHDataset):
             self.time_unit.convert_to_units('s')
             self.length_unit.convert_to_units('kpc')
             self.mass_unit.convert_to_units('Msun')
+        if mean_molecular_weight is None:
+            self.mu = default_mu
+        else:
+            self.mu = mean_molecular_weight
 
     @classmethod
     def _setup_binary_spec(cls, spec, spec_dict):

@@ -1,4 +1,6 @@
 import os
+import platform
+from concurrent.futures import ThreadPoolExecutor as Pool
 import glob
 import sys
 from sys import platform as _platform
@@ -12,8 +14,37 @@ from setupext import \
     read_embree_location, \
     in_conda_env
 from distutils.version import LooseVersion
+from distutils.ccompiler import CCompiler
 import pkg_resources
 
+
+def _get_cpu_count():
+    if platform.system() != "Windows":
+        return os.cpu_count()
+    return 0
+
+
+def _compile(
+    self, sources, output_dir=None, macros=None, include_dirs=None,
+    debug=0, extra_preargs=None, extra_postargs=None, depends=None,
+):
+    """Function to monkey-patch distutils.ccompiler.CCompiler"""
+    macros, objects, extra_postargs, pp_opts, build = self._setup_compile(
+        output_dir, macros, include_dirs, sources, depends, extra_postargs
+    )
+    cc_args = self._get_cc_args(pp_opts, debug, extra_preargs)
+
+    for obj in objects:
+        try:
+            src, ext = build[obj]
+        except KeyError:
+            continue
+        self._compile(obj, src, ext, cc_args, extra_postargs, pp_opts)
+
+    # Return *all* object filenames, not just the ones we just built.
+    return objects
+
+CCompiler.compile = _compile
 
 if sys.version_info < (3, 5):
     print("yt currently supports versions newer than Python 3.5")
@@ -75,7 +106,8 @@ cython_extensions = [
               include_dirs=["yt/utilities/lib/",
                             "yt/utilities/lib/ewahboolarray"],
               language="c++",
-              libraries=std_libs),
+              libraries=std_libs,
+              extra_compile_args=["-std=c++11"]),
     Extension("yt.geometry.selection_routines",
               ["yt/geometry/selection_routines.pyx"],
               include_dirs=["yt/utilities/lib/"],
@@ -122,7 +154,7 @@ cython_extensions = [
               ],
               libraries=std_libs,
               language="c++",
-              extra_compile_arg=["-std=c++03"]),
+              extra_compile_args=["-std=c++03"]),
     Extension("yt.utilities.lib.cykdtree.utils",
               [
                   "yt/utilities/lib/cykdtree/utils.pyx",
@@ -131,7 +163,7 @@ cython_extensions = [
               depends=["yt/utilities/lib/cykdtree/c_utils.hpp"],
               libraries=std_libs,
               language="c++",
-              extra_compile_arg=["-std=c++03"]),    
+              extra_compile_args=["-std=c++03"]),
     Extension("yt.utilities.lib.fnv_hash",
               ["yt/utilities/lib/fnv_hash.pyx"],
               include_dirs=["yt/utilities/lib/"],
@@ -289,18 +321,6 @@ if check_for_pyembree() is not None:
 
     cython_extensions += embree_extensions
 
-if os.environ.get("GPERFTOOLS", "no").upper() != "NO":
-    gpd = os.environ["GPERFTOOLS"]
-    idir = os.path.join(gpd, "include")
-    ldir = os.path.join(gpd, "lib")
-    print(("INCLUDE AND LIB DIRS", idir, ldir))
-    cython_extensions.append(
-        Extension("yt.utilities.lib.perftools_wrap",
-                  ["yt/utilities/lib/perftools_wrap.pyx"],
-                  libraries=["profiler"],
-                  library_dirs=[ldir],
-                  include_dirs=[idir]))
-
 class build_ext(_build_ext):
     # subclass setuptools extension builder to avoid importing cython and numpy
     # at top level in setup.py. See http://stackoverflow.com/a/21621689/1382869
@@ -328,7 +348,9 @@ package manager for your python environment.""" %
         from Cython.Build import cythonize
         self.distribution.ext_modules[:] = cythonize(
             self.distribution.ext_modules,
-            compiler_directives={'language_level': 2})
+            compiler_directives={'language_level': 2},
+            nthreads=_get_cpu_count(),
+        )
         _build_ext.finalize_options(self)
         # Prevent numpy from thinking it is still in its setup process
         # see http://stackoverflow.com/a/21621493/1382869
@@ -341,6 +363,17 @@ package manager for your python environment.""" %
         import numpy
         self.include_dirs.append(numpy.get_include())
 
+    def build_extensions(self):
+        self.check_extensions_list(self.extensions)
+
+        ncpus = _get_cpu_count()
+        if ncpus > 0:
+            with Pool(ncpus) as pool:
+                pool.map(self.build_extension, self.extensions)
+        else:
+            super().build_extensions()
+
+
 class sdist(_sdist):
     # subclass setuptools source distribution builder to ensure cython
     # generated C files are included in source distribution.
@@ -351,66 +384,69 @@ class sdist(_sdist):
         cythonize(
             cython_extensions,
             compiler_directives={'language_level': 2},
+            nthreads=_get_cpu_count(),
         )
         _sdist.run(self)
 
-setup(
-    name="yt",
-    version=VERSION,
-    description="An analysis and visualization toolkit for volumetric data",
-    long_description = long_description,
-    long_description_content_type='text/markdown',
-    classifiers=["Development Status :: 5 - Production/Stable",
-                 "Environment :: Console",
-                 "Intended Audience :: Science/Research",
-                 "License :: OSI Approved :: BSD License",
-                 "Operating System :: MacOS :: MacOS X",
-                 "Operating System :: POSIX :: AIX",
-                 "Operating System :: POSIX :: Linux",
-                 "Programming Language :: C",
-                 "Programming Language :: Python :: 3",
-                 "Programming Language :: Python :: 3.5",
-                 "Programming Language :: Python :: 3.6",
-                 "Programming Language :: Python :: 3.7",
-                 "Topic :: Scientific/Engineering :: Astronomy",
-                 "Topic :: Scientific/Engineering :: Physics",
-                 "Topic :: Scientific/Engineering :: Visualization"],
-    keywords='astronomy astrophysics visualization ' +
-    'amr adaptivemeshrefinement',
-    entry_points={'console_scripts': [
-        'yt = yt.utilities.command_line:run_main',
-    ],
-        'nose.plugins.0.10': [
-            'answer-testing = yt.utilities.answer_testing.framework:AnswerTesting'
-    ]
-    },
-    packages=find_packages(),
-    include_package_data = True,
-    install_requires=[
-        'matplotlib>=1.5.3',
-        'setuptools>=19.6',
-        'sympy>=1.2',
-        'numpy>=1.10.4',
-        'IPython>=1.0',
-        'unyt>=2.2.2',
-    ],
-    extras_require = {
-        'hub':  ["girder_client"],
-        'mapserver': ["bottle"]
-    },
-    cmdclass={'sdist': sdist, 'build_ext': build_ext},
-    author="The yt project",
-    author_email="yt-dev@python.org",
-    url="https://github.com/yt-project/yt",
-    project_urls={
-        'Homepage': 'https://yt-project.org/',
-        'Documentation': 'https://yt-project.org/doc/',
-        'Source': 'https://github.com/yt-project/yt/',
-        'Tracker': 'https://github.com/yt-project/yt/issues'
-    },
-    license="BSD 3-Clause",
-    zip_safe=False,
-    scripts=["scripts/iyt"],
-    ext_modules=cython_extensions + extensions,
-    python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*'
-)
+
+if __name__ == "__main__":
+    setup(
+        name="yt",
+        version=VERSION,
+        description="An analysis and visualization toolkit for volumetric data",
+        long_description = long_description,
+        long_description_content_type='text/markdown',
+        classifiers=["Development Status :: 5 - Production/Stable",
+                     "Environment :: Console",
+                     "Intended Audience :: Science/Research",
+                     "License :: OSI Approved :: BSD License",
+                     "Operating System :: MacOS :: MacOS X",
+                     "Operating System :: POSIX :: AIX",
+                     "Operating System :: POSIX :: Linux",
+                     "Programming Language :: C",
+                     "Programming Language :: Python :: 3",
+                     "Programming Language :: Python :: 3.5",
+                     "Programming Language :: Python :: 3.6",
+                     "Programming Language :: Python :: 3.7",
+                     "Topic :: Scientific/Engineering :: Astronomy",
+                     "Topic :: Scientific/Engineering :: Physics",
+                     "Topic :: Scientific/Engineering :: Visualization"],
+        keywords='astronomy astrophysics visualization ' +
+        'amr adaptivemeshrefinement',
+        entry_points={'console_scripts': [
+            'yt = yt.utilities.command_line:run_main',
+        ],
+            'nose.plugins.0.10': [
+                'answer-testing = yt.utilities.answer_testing.framework:AnswerTesting'
+        ]
+        },
+        packages=find_packages(),
+        include_package_data = True,
+        install_requires=[
+            'matplotlib>=1.5.3',
+            'setuptools>=19.6',
+            'sympy>=1.2',
+            'numpy>=1.10.4',
+            'IPython>=1.0',
+            'unyt>=2.2.2',
+        ],
+        extras_require = {
+            'hub':  ["girder_client"],
+            'mapserver': ["bottle"]
+        },
+        cmdclass={'sdist': sdist, 'build_ext': build_ext},
+        author="The yt project",
+        author_email="yt-dev@python.org",
+        url="https://github.com/yt-project/yt",
+        project_urls={
+            'Homepage': 'https://yt-project.org/',
+            'Documentation': 'https://yt-project.org/doc/',
+            'Source': 'https://github.com/yt-project/yt/',
+            'Tracker': 'https://github.com/yt-project/yt/issues'
+        },
+        license="BSD 3-Clause",
+        zip_safe=False,
+        scripts=["scripts/iyt"],
+        ext_modules=cython_extensions + extensions,
+        python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*'
+    )

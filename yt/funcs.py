@@ -21,7 +21,8 @@ import getpass
 from math import floor, ceil
 from numbers import Number as numeric_type
 
-import urllib
+import urllib.request
+import urllib.parse
 from yt.utilities.logger import ytLogger as mylog
 from yt.utilities.lru_cache import lru_cache
 from yt.utilities.exceptions import YTInvalidWidthError
@@ -832,11 +833,11 @@ def get_output_filename(name, keyword, suffix):
     Examples
     --------
 
-    >>> print get_output_filename(None, "Projection_x", ".png")
+    >>> print(get_output_filename(None, "Projection_x", ".png"))
     Projection_x.png
-    >>> print get_output_filename("my_file", "Projection_x", ".png")
+    >>> print(get_output_filename("my_file", "Projection_x", ".png"))
     my_file.png
-    >>> print get_output_filename("my_file/", "Projection_x", ".png")
+    >>> print(get_output_filename("my_file/", "Projection_x", ".png"))
     my_file/Projection_x.png
     
     """
@@ -1197,7 +1198,7 @@ def validate_float(obj):
     """Validates if the passed argument is a float value.
 
     Raises an exception if `obj` is a single float value
-    or a YTQunatity of size 1.
+    or a YTQuantity of size 1.
 
     Parameters
     ----------

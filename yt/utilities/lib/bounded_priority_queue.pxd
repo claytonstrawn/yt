@@ -7,13 +7,6 @@ been added to it.
 
 """
 
-#-----------------------------------------------------------------------------
-# Copyright (c) 2017, yt Development Team.
-#
-# Distributed under the terms of the Modified BSD License.
-#
-# The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
 import numpy as np
 cimport numpy as np
 
@@ -43,5 +36,6 @@ cdef class NeighborList:
     cdef np.intp_t size
     cdef np.intp_t _max_size
 
+    cdef int _update_memview(self) except -1
     cdef int _extend(self) nogil except -1
     cdef int add_pid(self, np.float64_t val, np.int64_t ind) nogil except -1

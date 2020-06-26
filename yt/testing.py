@@ -608,14 +608,14 @@ def expand_keywords(keywords, full=False):
     >>> keywords['dpi'] = (50, 100, 200)
     >>> keywords['cmap'] = ('arbre', 'kelp')
     >>> list_of_kwargs = expand_keywords(keywords)
-    >>> print list_of_kwargs
+    >>> print(list_of_kwargs)
 
     array([{'cmap': 'arbre', 'dpi': 50},
            {'cmap': 'kelp', 'dpi': 100},
            {'cmap': 'arbre', 'dpi': 200}], dtype=object)
 
     >>> list_of_kwargs = expand_keywords(keywords, full=True)
-    >>> print list_of_kwargs
+    >>> print(list_of_kwargs)
 
     array([{'cmap': 'arbre', 'dpi': 50},
            {'cmap': 'arbre', 'dpi': 100},
@@ -1223,3 +1223,103 @@ class TempDirTest(unittest.TestCase):
     def tearDown(self):
         os.chdir(self.curdir)
         shutil.rmtree(self.tmpdir)
+
+class ParticleSelectionComparison:
+    """
+    This is a test helper class that takes a particle dataset, caches the
+    particles it has on disk (manually reading them using lower-level IO
+    routines) and then received a data object that it compares against manually
+    running the data object's selection routines.  All supplied data objects
+    must be created from the input dataset.
+    """
+
+    def __init__(self, ds):
+        self.ds = ds
+        # Construct an index so that we get all the data_files
+        ds.index
+        particles = {}
+        # hsml is the smoothing length we use for radial selection
+        hsml = {}
+        for data_file in ds.index.data_files:
+            for ptype, pos_arr in ds.index.io._yield_coordinates(data_file):
+                particles.setdefault(ptype, []).append(pos_arr)
+                if ptype in getattr(ds, '_sph_ptypes', ()):
+                    hsml.setdefault(ptype, []).append(ds.index.io._get_smoothing_length(
+                        data_file, pos_arr.dtype, pos_arr.shape))
+        for ptype in particles:
+            particles[ptype] = np.concatenate(particles[ptype])
+            if ptype in hsml:
+                hsml[ptype] = np.concatenate(hsml[ptype])
+        self.particles = particles
+        self.hsml = hsml
+
+    def compare_dobj_selection(self, dobj):
+        for ptype in sorted(self.particles):
+            x, y, z = self.particles[ptype].T
+            # Set our radii to zero for now, I guess?
+            radii = self.hsml.get(ptype, 0.0)
+            sel_index = dobj.selector.select_points(x, y, z, radii)
+            if sel_index is None:
+                sel_pos = np.empty((0, 3))
+            else:
+                sel_pos = self.particles[ptype][sel_index, :]
+
+            obj_results = []
+            for chunk in dobj.chunks([], "io"):
+                obj_results.append(chunk[ptype, "particle_position"])
+            obj_results = np.concatenate(obj_results, axis = 0)
+            assert_equal(sel_pos, obj_results)
+
+    def run_defaults(self):
+        """
+        This runs lots of samples that touch different types of wraparounds.
+
+        Specifically, it does:
+
+            * sphere in center with radius 0.1 unitary
+            * sphere in center with radius 0.2 unitary
+            * sphere in each of the eight corners of the domain with radius 0.1 unitary
+            * sphere in center with radius 0.5 unitary
+            * box that covers 0.1 .. 0.9
+            * box from 0.8 .. 0.85
+            * box from 0.3..0.6, 0.2..0.8, 0.0..0.1
+        """
+        sp1 = self.ds.sphere("c", (0.1, "unitary"))
+        self.compare_dobj_selection(sp1)
+
+        sp2 = self.ds.sphere("c", (0.2, "unitary"))
+        self.compare_dobj_selection(sp2)
+
+        centers = [[0.04, 0.5, 0.5],
+                   [0.5, 0.04, 0.5]
+                   [0.5, 0.5, 0.04]
+                   [0.04, 0.04, 0.04]
+                   [0.96, 0.5, 0.5]
+                   [0.5, 0.96, 0.5]
+                   [0.5, 0.5, 0.96]
+                   [0.96, 0.96, 0.96]]
+        for center in centers:
+            c = self.ds.arr(center, "unitary")
+            sp = self.ds.sphere(c, (0.1, "unitary"))
+            self.compare_dobj_selection(sp)
+
+        sp = self.ds.sphere("c", (0.5, "unitary"))
+        self.compare_dobj_selection(sp)
+
+        dd = self.ds.all_data()
+        self.compare_dobj_selection(dd)
+
+        reg1 = self.ds.r[ (0.1, 'unitary'):(0.9, 'unitary'),
+                          (0.1, 'unitary'):(0.9, 'unitary'),
+                          (0.1, 'unitary'):(0.9, 'unitary')]
+        self.compare_dobj_selection(reg1)
+
+        reg2 = self.ds.r[ (0.8, 'unitary'):(0.85, 'unitary'),
+                          (0.8, 'unitary'):(0.85, 'unitary'),
+                          (0.8, 'unitary'):(0.85, 'unitary')]
+        self.compare_dobj_selection(reg2)
+
+        reg3 = self.ds.r[ (0.3, 'unitary'):(0.6, 'unitary'),
+                          (0.2, 'unitary'):(0.8, 'unitary'),
+                          (0.0, 'unitary'):(0.1, 'unitary')]
+        self.compare_dobj_selection(reg3)

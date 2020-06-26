@@ -6,6 +6,35 @@ Loading Data
 This section contains information on how to load data into yt, as well as
 some important caveats about different data formats.
 
+:: _loading-sample-data:
+
+Sample Data
+-----------
+
+The `yt` community has provided a large number of sample datasets, which are
+accessible from https://yt-project.org/data/ .  `yt` also provides a helper
+function, `yt.load_sample`, that can load from a set of sample datasets.  The
+quickstart notebooks in this documentation utilize this.
+
+The files are, in general, named identically to their listings on the data
+catalog page.  For instance, you can load `IsolatedGalaxy` by executing:
+
+.. code-block:: python
+
+   import yt
+
+   ds = yt.load_sample("IsolatedGalaxy")
+
+To find a list of all available datasets, you can call `load_sample` without any arguments, and it will return a list of the names that can be supplied:
+
+.. code-block:: python
+
+   import yt
+
+   yt.load_sample()
+
+This will return a list of possible filenames; more information can be accessed on the data catalog.
+
 .. _loading-art-data:
 
 ART Data
@@ -186,11 +215,14 @@ larger than this.
 Alternative values for the following simulation parameters may be specified
 using a ``parameters`` dict, accepting the following keys:
 
-* ``Gamma``: ratio of specific heats, Type: Float
+* ``gamma``: ratio of specific heats, Type: Float. If not specified, 
+  :math:`\gamma = 5/3` is assumed.
 * ``geometry``: Geometry type, currently accepts ``"cartesian"`` or
-  ``"cylindrical"``
+  ``"cylindrical"``. Default is ``"cartesian"``.
 * ``periodicity``: Is the domain periodic? Type: Tuple of boolean values
-  corresponding to each dimension
+  corresponding to each dimension. Defaults to ``True`` in all directions.
+* ``mu``: mean molecular weight, Type: Float. If not specified, :math:`\mu = 0.6`
+  (for a fully ionized primordial plasma) is assumed.
 
 .. code-block:: python
 
@@ -258,6 +290,18 @@ This means that the yt fields, e.g. ``("gas","density")``,
 (or whatever unit system was specified), but the Athena fields, e.g.,
 ``("athena_pp","density")``, ``("athena_pp","vel1")``, ``("athena_pp","Bcc1")``,
 will be in code units.
+
+Alternative values for the following simulation parameters may be specified
+using a ``parameters`` dict, accepting the following keys:
+
+* ``gamma``: ratio of specific heats, Type: Float. If not specified, 
+  :math:`\gamma = 5/3` is assumed.
+* ``geometry``: Geometry type, currently accepts ``"cartesian"`` or
+  ``"cylindrical"``. Default is ``"cartesian"``.
+* ``periodicity``: Is the domain periodic? Type: Tuple of boolean values
+  corresponding to each dimension. Defaults to ``True`` in all directions.
+* ``mu``: mean molecular weight, Type: Float. If not specified, :math:`\mu = 0.6`
+  (for a fully ionized primordial plasma) is assumed.
 
 .. rubric:: Caveats
 
@@ -1032,7 +1076,31 @@ grid structure and are at the same simulation time, the particle data may be loa
 However, if you don't have a corresponding plotfile for a particle file, but would still
 like to load the particle data, you can still call ``yt.load`` on the file. However, the
 grid information will not be available, and the particle data will be loaded in a fashion
-similar to SPH data.
+similar to other particle-based datasets in yt.
+
+Mean Molecular Weight and Number Density Fields
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The way the mean molecular weight and number density fields are defined depends on 
+what type of simulation you are running. If you are running a simulation without 
+species and a :math:`\gamma`-law equation of state, then the mean molecular weight
+is defined using the ``eos_singleSpeciesA`` parameter in the FLASH dataset. If you
+have multiple species and your dataset contains the FLASH field ``"abar"``, then
+this is used as the mean molecular weight. In either case, the number density field
+is calculated using this weight. 
+
+If you are running a FLASH simulation where the fields ``"sumy"`` and ``"ye"`` are 
+present, Then the mean molecular weight is the inverse of ``"sumy"``, and the fields 
+``"El_number_density"``, ``"ion_number_density"``, and ``"number_density"`` are 
+defined using the following mathematical definitions:
+
+* ``"El_number_density"`` :math:`n_e = N_AY_e\rho`
+* ``"ion_number_density"`` :math:`n_i = N_A\rho/\bar{A}`
+* ``"number_density"`` :math:`n = n_e + n_i`
+
+where :math:`n_e` and :math:`n_i` are the electron and ion number densities, 
+:math:`\rho` is the mass density, :math:`Y_e` is the electron number per baryon,
+:math:`\bar{A}` is the mean molecular weight, and :math:`N_A` is Avogadro's number.
 
 .. rubric:: Caveats
 
@@ -1336,7 +1404,10 @@ value can be changed when loading an Arepo dataset by setting the
    import yt
    ds = yt.load("snapshot_100.hdf5", smoothing_factor=1.5)
 
-Currently, only Arepo HDF5 snapshots are supported.
+Currently, only Arepo HDF5 snapshots are supported. If the "GFM" metal fields are
+present in your dataset, they will be loaded in and aliased to the appropriate 
+species fields in the `"GFM_Metals"` field on-disk. For more information, see
+the `Illustris TNG documentation <http://www.tng-project.org/data/docs/specifications/#sec1b>`_.
 
 .. _loading-gamer-data:
 
