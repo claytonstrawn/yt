@@ -1815,7 +1815,7 @@ class YTSelectionContainer3D(YTSelectionContainer):
         self.coords = None
         self._grids = None
 
-    def cut_region(self, field_cuts, field_parameters=None):
+    def cut_region(self, field_cuts, field_parameters=None,locals={}):
         """
         Return a YTCutRegion, where the a cell is identified as being inside
         the cut region based on the value of one or more fields.  Note that in
@@ -1845,7 +1845,7 @@ class YTSelectionContainer3D(YTSelectionContainer):
         >>> print(cr.quantities.total_quantity("cell_mass").in_units('Msun'))
         """
         cr = self.ds.cut_region(self, field_cuts,
-                                field_parameters=field_parameters)
+                                field_parameters=field_parameters,locals=locals)
         return cr
 
     def extract_isocontours(self, field, value, filename = None,
