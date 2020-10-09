@@ -6,6 +6,149 @@ Loading Data
 This section contains information on how to load data into yt, as well as
 some important caveats about different data formats.
 
+.. _loading-sample-data:
+
+Sample Data
+-----------
+
+The `yt` community has provided a large number of sample datasets, which are
+accessible from https://yt-project.org/data/ .  `yt` also provides a helper
+function, `yt.load_sample`, that can load from a set of sample datasets.  The
+quickstart notebooks in this documentation utilize this.
+
+The files are, in general, named identically to their listings on the data
+catalog page.  For instance, you can load `IsolatedGalaxy` by executing:
+
+.. code-block:: python
+
+   import yt
+
+   ds = yt.load_sample("IsolatedGalaxy")
+
+To find a list of all available datasets, you can call `load_sample` without any arguments, and it will return a list of the names that can be supplied:
+
+.. code-block:: python
+
+   import yt
+
+   yt.load_sample()
+
+This will return a list of possible filenames; more information can be accessed on the data catalog.
+
+.. _loading-amrvac-data:
+
+AMRVAC Data
+-----------
+
+.. note::
+
+   This frontend is brand new and may be subject to rapid change in the
+   near future.
+
+To load data to yt, simply use
+
+.. code-block::
+
+  import yt
+  ds = yt.load("output0010.dat")
+
+
+.. rubric:: Dataset geometry & periodicity
+
+Starting from AMRVAC 2.2, and datfile format 5, a geometry flag
+(e.g. "Cartesian_2.5D", "Polar_2D", "Cylindrical_1.5D"...) was added
+to the datfile header.  yt will fall back to a cartesian mesh if the
+geometry flag is not found.  For older datfiles however it is possible
+to provide it externally with the ``override_geometry`` parameter.
+
+.. code-block:: python
+
+  # examples
+  ds = yt.load("output0010.dat", override_geometry="polar")
+  ds = yt.load("output0010.dat", override_geometry="cartesian")
+
+Note that ``override_geometry`` has priority over any ``geometry`` flag
+present in recent datfiles, which means it can be used to force ``r``
+VS ``theta`` 2D plots in polar geometries (for example), but this may
+produce unpredictable behaviour and comes with no guarantee.
+
+A ``ndim``-long ``periodic`` boolean array was also added to improve
+compatibility with yt. See http://amrvac.org/md_doc_fileformat.html
+for details.
+
+.. rubric:: Auto-setup for derived fields
+
+Yt will attempt to mimic the way AMRVAC internally defines kinetic energy,
+pressure, and sound speed. To see a complete list of fields that are defined after
+loading, one can simply type
+
+.. code-block:: python
+
+  print(ds.derived_field_list)
+
+Note that for adiabatic (magneto-)hydrodynamics, i.e. `(m)hd_energy = False` in
+AMRVAC, additional input data is required in order to setup some of these fields.
+This is done by passing the corresponding parfile(s) at load time
+
+.. code-block:: python
+
+  # example using a single parfile
+  ds = yt.load("output0010.dat", parfiles="amrvac.par")
+
+  # ... or using multiple parfiles
+  ds = yt.load("output0010.dat", parfiles=["amrvac.par", "modifier.par"])
+
+In case more than one parfile is passed, yt will create a single namelist by
+replicating AMRVAC's rules (see "Using multiple par files"
+http://amrvac.org/md_doc_commandline.html).
+
+
+.. rubric:: Unit System
+
+AMRVAC only supports dimensionless fields and as such, no unit system
+is ever attached to any given dataset.  yt however defines physical
+quantities and give them units. As is customary in yt, the default
+unit system is ``cgs``, e.g. lengths are read as "cm" unless specified
+otherwise.
+
+The user has two ways to control displayed units, through
+``unit_system`` (``"cgs"``, ``"mks"`` or ``"code"``) and
+``units_override``. Example:
+
+.. code-block:: python
+
+  units_override = dict(length_unit=(100., 'au'), mass_unit=yt.units.mass_sun)
+  ds = yt.load("output0010.dat", units_override=units_override, unit_system="mks")
+
+To ensure consistency with normalisations as used in AMRVAC we only allow
+overriding a maximum of three units. Allowed unit combinations at the moment are
+
+.. code-block:: none
+
+  {numberdensity_unit, temperature_unit, length_unit}
+  {mass_unit, temperature_unit, length_unit}
+  {mass_unit, time_unit, length_unit}
+  {numberdensity_unit, velocity_unit, length_unit}
+  {mass_unit, velocity_unit, length_unit}
+
+Appropriate errors are thrown for other combinations.
+
+
+.. rubric:: Partially supported and unsupported features
+
+* a maximum of 100 dust species can be read by yt at the moment.
+  If your application needs this limit increased, please report an issue
+  https://github.com/yt-project/yt/issues
+* particle data: currently not supported (but might come later)
+* staggered grids (AMRVAC 2.2 and later): yt logs a warning if you load
+  staggered datasets, but the flag is currently ignored.
+* "stretched grids" as defined in AMRVAC have no correspondance in yt,
+  hence will never be supported.
+
+.. note::
+
+   Ghost cells exist in .dat files but never read by yt.
+
 .. _loading-art-data:
 
 ART Data
@@ -106,7 +249,8 @@ Athena Data
 Athena 4.x VTK data is supported and cared for by John ZuHone. Both uniform grid
 and SMR datasets are supported.
 
-.. note:
+.. note::
+
    yt also recognizes Fargo3D data written to VTK files as
    Athena data, but support for Fargo3D data is preliminary.
 
@@ -186,11 +330,14 @@ larger than this.
 Alternative values for the following simulation parameters may be specified
 using a ``parameters`` dict, accepting the following keys:
 
-* ``Gamma``: ratio of specific heats, Type: Float
+* ``gamma``: ratio of specific heats, Type: Float. If not specified, 
+  :math:`\gamma = 5/3` is assumed.
 * ``geometry``: Geometry type, currently accepts ``"cartesian"`` or
-  ``"cylindrical"``
+  ``"cylindrical"``. Default is ``"cartesian"``.
 * ``periodicity``: Is the domain periodic? Type: Tuple of boolean values
-  corresponding to each dimension
+  corresponding to each dimension. Defaults to ``True`` in all directions.
+* ``mu``: mean molecular weight, Type: Float. If not specified, :math:`\mu = 0.6`
+  (for a fully ionized primordial plasma) is assumed.
 
 .. code-block:: python
 
@@ -258,6 +405,18 @@ This means that the yt fields, e.g. ``("gas","density")``,
 (or whatever unit system was specified), but the Athena fields, e.g.,
 ``("athena_pp","density")``, ``("athena_pp","vel1")``, ``("athena_pp","Bcc1")``,
 will be in code units.
+
+Alternative values for the following simulation parameters may be specified
+using a ``parameters`` dict, accepting the following keys:
+
+* ``gamma``: ratio of specific heats, Type: Float. If not specified, 
+  :math:`\gamma = 5/3` is assumed.
+* ``geometry``: Geometry type, currently accepts ``"cartesian"`` or
+  ``"cylindrical"``. Default is ``"cartesian"``.
+* ``periodicity``: Is the domain periodic? Type: Tuple of boolean values
+  corresponding to each dimension. Defaults to ``True`` in all directions.
+* ``mu``: mean molecular weight, Type: Float. If not specified, :math:`\mu = 0.6`
+  (for a fully ionized primordial plasma) is assumed.
 
 .. rubric:: Caveats
 
@@ -552,7 +711,7 @@ file:
    ds = yt.load("MOOSE_sample_data/out.e-s010", step=0)
 
 Because Exodus II datasets can have multiple steps (which can correspond to time steps,
-picard iterations, non-linear solve iterations, etc...), you can also specify a step
+Picard iterations, non-linear solve iterations, etc...), you can also specify a step
 argument when you load an Exodus II data that defines the index at which to look when
 you read data from the file. Omitting this argument is the same as passing in 0, and
 setting ``step=-1`` selects the last time output in the file.
@@ -648,7 +807,7 @@ a dataset loaded as
    ds = yt.load("MOOSE_sample_data/mps_out.e")
 
 will not include the displacements in the vertex positions. The displacements can
-be turned on separately for each mesh in the file by passing in a a tuple of
+be turned on separately for each mesh in the file by passing in a tuple of
 (scale, offset) pairs for the meshes you want to enable displacements for.
 For example, the following code snippet turns displacements on for the second
 mesh, but not the first:
@@ -688,7 +847,7 @@ FITS Data
 ---------
 
 FITS data is *mostly* supported and cared for by John ZuHone. In order to
-read FITS data, `AstroPy <http://www.astropy.org>`_ must be installed. FITS
+read FITS data, `AstroPy <https://www.astropy.org>`_ must be installed. FITS
 data cubes can be loaded in the same way by yt as other datasets. yt
 can read FITS image files that have the following (case-insensitive) suffixes:
 
@@ -698,46 +857,91 @@ can read FITS image files that have the following (case-insensitive) suffixes:
 * fts.gz
 
 yt can currently read two kinds of FITS files: FITS image files and FITS
-binary table files containing positions, times, and energies of X-ray events.
+binary table files containing positions, times, and energies of X-ray
+events. These are described in more detail below. 
 
-Though a FITS image is composed of a single array in the FITS file,
-upon being loaded into yt it is automatically decomposed into grids:
+Types of FITS Datasets Supported by yt
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+yt FITS Data Standard
+"""""""""""""""""""""
+
+yt has facilities for creating 2 and 3-dimensional FITS images from derived, 
+fixed-resolution data products from other datasets. These include images 
+produced from slices, projections, and 3D covering grids. The resulting
+FITS images are fully-describing in that unit, parameter, and coordinate 
+information is passed from the original dataset. These can be created via the 
+:class:`~yt.visualization.fits_image.FITSImageData` class and its subclasses. 
+For information about how to use these special classes, see 
+:ref:`writing_fits_images`.
+
+Once you have produced a FITS file in this fashion, you can load it using
+yt and it will be detected as a ``YTFITSDataset`` object, and it can be analyzed
+in the same way as any other dataset in yt. 
+
+Astronomical Image Data
+"""""""""""""""""""""""
+
+These files are one of three types:
+
+* Generic two-dimensional FITS images in sky coordinates
+* Three or four-dimensional "spectral cubes"
+* *Chandra* event files
+
+These FITS images typically are in celestial or galactic coordinates, and
+for 3D spectral cubes the third axis is typically in velocity, wavelength,
+or frequency units. For these datasets, since yt does not yet recognize 
+non-spatial axes, the coordinates are in units of the image pixels. The
+coordinates of these pixels in the WCS coordinate systems will be available
+in separate fields. 
+
+Often, the aspect ratio of 3D spectral cubes can be far from unity. Because yt
+sets the pixel scale as the ``code_length``, certain visualizations (such as
+volume renderings) may look extended or distended in ways that are
+undesirable. To adjust the width in ``code_length`` of the spectral axis, set
+``spectral_factor`` equal to a constant which gives the desired scaling, or set
+it to ``"auto"`` to make the width the same as the largest axis in the sky
+plane:
 
 .. code-block:: python
 
-   import yt
-   ds = yt.load("m33_hi.fits")
-   ds.print_stats()
+   ds = yt.load("m33_hi.fits.gz", spectral_factor=0.1)
 
-.. parsed-literal::
+For 4D spectral cubes, the fourth axis is assumed to be composed of different 
+fields altogether (e.g., Stokes parameters for radio data).
 
-   level  # grids         # cells     # cells^3
-   ----------------------------------------------
-     0       512          981940800       994
-   ----------------------------------------------
-             512          981940800
+*Chandra* X-ray event data, which is in tabular form, will be loaded as 
+particle fields in yt, but a grid will be constructed from the WCS 
+information in the FITS header. There is a helper function, 
+``setup_counts_fields``, which may be used to make deposited image fields 
+from the event data for different energy bands (for an example see 
+:ref:`xray_fits`).
 
-yt will generate its own domain decomposition, but the number of grids can be
-set manually by passing the ``nprocs`` parameter to the ``load`` call:
+Generic FITS Images
+"""""""""""""""""""
 
-.. code-block:: python
-
-   ds = load("m33_hi.fits", nprocs=1024)
+If the FITS file contains images but does not have adequate header information
+to fall into one of the above categories, yt will still load the data, but 
+the resulting field and/or coordinate information will necessarily be 
+incomplete. Field names may not be descriptive, and units may be incorrect. To
+get the full use out of yt for FITS files, make sure that the file is sufficiently
+self-descripting to fall into one of the above categories.
 
 Making the Most of yt for FITS Data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-yt will load data without WCS information and/or some missing header keywords, but the resulting
-field information will necessarily be incomplete. For example, field names may not be descriptive,
-and units will not be correct. To get the full use out of yt for FITS files, make sure that for
-each image the following header keywords have sensible values:
+yt will load data without WCS information and/or some missing header keywords, 
+but the resulting field and/or coordinate information will necessarily be 
+incomplete. For example, field names may not be descriptive, and units will not 
+be correct. To get the full use out of yt for FITS files, make sure that for
+each image HDU the following standard header keywords have sensible values:
 
 * ``CDELTx``: The pixel width in along axis ``x``
 * ``CRVALx``: The coordinate value at the reference position along axis ``x``
 * ``CRPIXx``: The reference pixel along axis ``x``
 * ``CTYPEx``: The projection type of axis ``x``
 * ``CUNITx``: The units of the coordinate along axis ``x``
-* ``BTYPE``: The type of the image
+* ``BTYPE``: The type of the image, this will be used as the field name
 * ``BUNIT``: The units of the image
 
 FITS header keywords can easily be updated using AstroPy. For example,
@@ -745,43 +949,13 @@ to set the ``BTYPE`` and ``BUNIT`` keywords:
 
 .. code-block:: python
 
-   import astropy.io.fits as pyfits
-   f = pyfits.open("xray_flux_image.fits", mode="update")
+   from astropy.io import fits
+   f = fits.open("xray_flux_image.fits", mode="update")
    f[0].header["BUNIT"] = "cts/s/pixel"
    f[0].header["BTYPE"] = "flux"
    f.flush()
    f.close()
 
-FITS Coordinates
-^^^^^^^^^^^^^^^^
-
-For FITS datasets, the unit of ``code_length`` is always the width of one
-pixel. yt will attempt to use the WCS information in the FITS header to
-construct information about the coordinate system, and provides support for
-the following dataset types:
-
-1. Rectilinear 2D/3D images with length units (e.g., Mpc, AU,
-   etc.) defined in the ``CUNITx`` keywords
-2. 2D images in some celestial coordinate systems (RA/Dec,
-   galactic latitude/longitude, defined in the ``CTYPEx``
-   keywords), and X-ray binary table event files
-3. 3D images with celestial coordinates and a third axis for another
-   quantity, such as velocity, frequency, wavelength, etc.
-4. 4D images with the first three axes like Case 3, where the slices
-   along the 4th axis are interpreted as different fields.
-
-If your data is of the first case, yt will determine the length units based
-on the information in the header. If your data is of the second or third
-cases, no length units will be assigned, but the world coordinate information
-about the axes will be stored in separate fields. If your data is of the
-fourth type, the coordinates of the first three axes will be determined
-according to cases 1-3.
-
-.. note::
-
-  Linear length-based coordinates (Case 1 above) are only supported if all
-  dimensions have the same value for ``CUNITx``. WCS coordinates are only
-  supported for Cases 2-4.
 
 FITS Data Decomposition
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -812,8 +986,7 @@ set manually by passing the ``nprocs`` parameter to the ``load`` call:
 
 .. code-block:: python
 
-   ds = load("m33_hi.fits", nprocs=64)
-
+   ds = yt.load("m33_hi.fits", nprocs=64)
 
 Fields in FITS Datasets
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -833,21 +1006,15 @@ The third way is if auxiliary files are included along with the main file, like 
 
 .. code-block:: python
 
-   ds = load("flux.fits", auxiliary_files=["temp.fits","metal.fits"])
+   ds = yt.load("flux.fits", auxiliary_files=["temp.fits","metal.fits"])
 
 The image blocks in each of these files will be loaded as a separate field,
 provided they have the same dimensions as the image blocks in the main file.
 
-Additionally, fields corresponding to the WCS coordinates will be generated.
+Additionally, fields corresponding to the WCS coordinates will be generated
 based on the corresponding ``CTYPEx`` keywords. When queried, these fields
 will be generated from the pixel coordinates in the file using the WCS
 transformations provided by AstroPy.
-
-X-ray event data will be loaded as particle fields in yt, but a grid will be
-constructed from the WCS information in the FITS header. There is a helper
-function, ``setup_counts_fields``, which may be used to make deposited image
-fields from the event data for different energy bands (for an example see
-:ref:`xray_fits`).
 
 .. note::
 
@@ -874,11 +1041,11 @@ containing different mask values for different fields:
 
 .. code-block:: python
 
-   # passing a single float
-   ds = load("m33_hi.fits", nan_mask=0.0)
+   # passing a single float for all images
+   ds = yt.load("m33_hi.fits", nan_mask=0.0)
 
    # passing a dict
-   ds = load("m33_hi.fits", nan_mask={"intensity":-1.0,"temperature":0.0})
+   ds = yt.load("m33_hi.fits", nan_mask={"intensity":-1.0,"temperature":0.0})
 
 ``suppress_astropy_warnings``
 """""""""""""""""""""""""""""
@@ -886,17 +1053,6 @@ containing different mask values for different fields:
 Generally, AstroPy may generate a lot of warnings about individual FITS
 files, many of which you may want to ignore. If you want to see these
 warnings, set ``suppress_astropy_warnings = False``.
-
-``spectral_factor``
-"""""""""""""""""""
-
-Often, the aspect ratio of 3D spectral cubes can be far from unity. Because yt
-sets the pixel scale as the ``code_length``, certain visualizations (such as
-volume renderings) may look extended or distended in ways that are
-undesirable. To adjust the width in ``code_length`` of the spectral axis, set
-``spectral_factor`` equal to a constant which gives the desired scaling, or set
-it to ``"auto"`` to make the width the same as the largest axis in the sky
-plane.
 
 Miscellaneous Tools for Use with FITS Data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -950,7 +1106,7 @@ version of AstroPy >= 1.3 must be installed.
 .. code-block:: python
 
   wcs_slc = PlotWindowWCS(slc)
-  wcs_slc.show() # for the IPython notebook
+  wcs_slc.show() # for Jupyter notebooks
   wcs_slc.save()
 
 ``WCSAxes`` is still in an experimental state, but as its functionality
@@ -962,7 +1118,7 @@ improves it will be utilized more here.
 .. note::
 
   The following functionality requires the
-  `spectral-cube <http://spectral-cube.readthedocs.org>`_ library to be
+  `spectral-cube <https://spectral-cube.readthedocs.io/en/latest/>`_ library to be
   installed.
 
 If you have a spectral intensity dataset of some sort, and would like to
@@ -978,8 +1134,8 @@ individual lines from an intensity cube:
                   'CH3NH2': (218.40956, 'GHz')}
   slab_width = (0.05, "GHz")
   ds = create_spectral_slabs("intensity_cube.fits",
-                                    slab_centers, slab_width,
-                                    nan_mask=0.0)
+                             slab_centers, slab_width,
+                             nan_mask=0.0)
 
 All keyword arguments to ``create_spectral_slabs`` are passed on to ``load`` when
 creating the dataset (see :ref:`additional_fits_options` above). In the
@@ -992,11 +1148,12 @@ zero, and the left and right edges of the domain along this axis are
 Examples of Using FITS Data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The following IPython notebooks show examples of working with FITS data in yt,
+The following Jupyter notebooks show examples of working with FITS data in yt,
 which we recommend you look at in the following order:
 
 * :ref:`radio_cubes`
 * :ref:`xray_fits`
+* :ref:`writing_fits_images`
 
 .. _loading-flash-data:
 
@@ -1034,7 +1191,31 @@ grid structure and are at the same simulation time, the particle data may be loa
 However, if you don't have a corresponding plotfile for a particle file, but would still
 like to load the particle data, you can still call ``yt.load`` on the file. However, the
 grid information will not be available, and the particle data will be loaded in a fashion
-similar to SPH data.
+similar to other particle-based datasets in yt.
+
+Mean Molecular Weight and Number Density Fields
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The way the mean molecular weight and number density fields are defined depends on 
+what type of simulation you are running. If you are running a simulation without 
+species and a :math:`\gamma`-law equation of state, then the mean molecular weight
+is defined using the ``eos_singleSpeciesA`` parameter in the FLASH dataset. If you
+have multiple species and your dataset contains the FLASH field ``"abar"``, then
+this is used as the mean molecular weight. In either case, the number density field
+is calculated using this weight. 
+
+If you are running a FLASH simulation where the fields ``"sumy"`` and ``"ye"`` are 
+present, Then the mean molecular weight is the inverse of ``"sumy"``, and the fields 
+``"El_number_density"``, ``"ion_number_density"``, and ``"number_density"`` are 
+defined using the following mathematical definitions:
+
+* ``"El_number_density"`` :math:`n_e = N_AY_e\rho`
+* ``"ion_number_density"`` :math:`n_i = N_A\rho/\bar{A}`
+* ``"number_density"`` :math:`n = n_e + n_i`
+
+where :math:`n_e` and :math:`n_i` are the electron and ion number densities, 
+:math:`\rho` is the mass density, :math:`Y_e` is the electron number per baryon,
+:math:`\bar{A}` is the mean molecular weight, and :math:`N_A` is Avogadro's number.
 
 .. rubric:: Caveats
 
@@ -1056,9 +1237,11 @@ from the OWLS project can be found at :ref:`owls-notebook`.
 
 .. note:: 
 
-   If you are loading a multi-file dataset with Gadget, supply the *zeroth*
-   file to the ``load`` command.  For instance,
-   ``yt.load("snapshot_061.0.hdf5")`` .
+   If you are loading a multi-file dataset with Gadget, you can either supply the *zeroth*
+   file to the ``load`` command or the directory containing all of the files.
+   For instance, to load the *zeroth* file: ``yt.load("snapshot_061.0.hdf5")`` . To
+   give just the directory, if you have all of your ``snapshot_000.*`` files in a directory
+   called ``snapshot_000``, do: ``yt.load("/path/to/snapshot_000")``.
 
 Gadget data in HDF5 format can be loaded with the ``load`` command:
 
@@ -1098,11 +1281,10 @@ and units.
 
 .. code-block:: python
 
-
    bbox = [[-600.0, 600.0], [-600.0, 600.0], [-600.0, 600.0]]
    unit_base = {
        'length': (1.0, 'kpc'),
-       'velocity: (1.0, 'km/s'),
+       'velocity': (1.0, 'km/s'),
        'mass': (1.0, 'Msun')
    }
 
@@ -1141,21 +1323,6 @@ The number of cells in an oct is defined by the expression
 It's recommended that if you want higher-resolution, try reducing the value of
 ``n_ref`` to 32 or 16.
 
-Also yt can be set to generate the global mesh index according to a specific
-type of particles instead of all the particles through the parameter
-``index_ptype``. For example, to build the octree only according to the
-``"PartType0"`` particles, you can do:
-
-.. code-block:: python
-
-   ds = yt.load("snapshot_061.hdf5", index_ptype="PartType0")
-
-By default, ``index_ptype`` is set to ``"all"``, which means all the particles.
-For Gadget binary outputs, ``index_ptype`` should be set using the particle type
-names yt uses internally (e.g. ``'Gas'``, ``'Halo'``, ``'Disk'``, etc). For
-Gadget HDF5 outputs the particle type names come from the HDF5 output and so
-should be referred to using names like ``'PartType0'``.
-
 .. _gadget-field-spec:
 
 Field Specifications
@@ -1171,13 +1338,14 @@ of this format:
 
 .. code-block:: python
 
-   default = ( "Coordinates",
-               "Velocities",
-               "ParticleIDs",
-               "Mass",
-               ("InternalEnergy", "Gas"),
-               ("Density", "Gas"),
-               ("SmoothingLength", "Gas"),
+   default = (
+       "Coordinates",
+       "Velocities",
+       "ParticleIDs",
+       "Mass",
+       ("InternalEnergy", "Gas"),
+       ("Density", "Gas"),
+       ("SmoothingLength", "Gas"),
    )
 
 This is the default specification used by the Gadget frontend.  It means that
@@ -1189,14 +1357,15 @@ this:
 
 .. code-block:: python
 
-   my_field_def = ( "Coordinates",
-               "Velocities",
-               "ParticleIDs",
-               ("Metallicity", "Halo"),
-               "Mass",
-               ("InternalEnergy", "Gas"),
-               ("Density", "Gas"),
-               ("SmoothingLength", "Gas"),
+   my_field_def = (
+       "Coordinates",
+       "Velocities",
+       "ParticleIDs",
+       ("Metallicity", "Halo"),
+       "Mass",
+       ("InternalEnergy", "Gas"),
+       ("Density", "Gas"),
+       ("SmoothingLength", "Gas"),
    )
 
 To save time, you can utilize the plugins file for yt and use it to add items
@@ -1308,20 +1477,70 @@ argument of this form:
 
 yt will utilize length, mass and time to set up all other units.
 
+.. _loading-swift-data:
+
+SWIFT Data
+----------
+
+yt has support for reading in SWIFT data from the HDF5 file format. It is able
+to access all particles and fields which are stored on-disk and it is also able
+to generate derived fields, i.e, linear momentum from on-disk fields.
+
+It is also possible to smooth the data onto a grid or an octree. This
+interpolation can be done using an SPH kernel using either the scatter or gather
+approach. The SWIFT frontend is supported and cared for by Ashley Kelly.
+
+SWIFT data in HDF5 format can be loaded with the ``load`` command:
+
+.. code-block:: python
+
+   import yt
+   ds = yt.load("EAGLE_6/eagle_0005.hdf5")
+
+.. _arepo-data:
+
+Arepo Data
+----------
+
+Arepo data is currently treated as SPH data. The gas cells have smoothing lengths
+assigned using the following prescription for a given gas cell :math:`i`:
+
+.. math::
+
+    h_{\rm sml} = \alpha\left(\frac{3}{4\pi}\frac{m_i}{\rho_i}\right)^{1/3}
+
+where :math:`\alpha` is a constant factor. By default, :math:`\alpha = 2`. In
+practice, smoothing lengths are only used for creating slices and projections,
+and this value of :math:`\alpha` works well for this purpose. However, this 
+value can be changed when loading an Arepo dataset by setting the 
+``smoothing_factor`` parameter:
+
+.. code-block:: python
+
+   import yt
+   ds = yt.load("snapshot_100.hdf5", smoothing_factor=1.5)
+
+Currently, only Arepo HDF5 snapshots are supported. If the "GFM" metal fields are
+present in your dataset, they will be loaded in and aliased to the appropriate 
+species fields in the `"GFM_Metals"` field on-disk. For more information, see
+the `Illustris TNG documentation <http://www.tng-project.org/data/docs/specifications/#sec1b>`_.
+
 .. _loading-gamer-data:
 
 GAMER Data
 ----------
 
-GAMER HDF5 data is supported and cared for by Hsi-Yu Schive. You can load the data like this:
+GAMER HDF5 data is supported and cared for by Hsi-Yu Schive. You can load the 
+data like this:
 
 .. code-block:: python
 
    import yt
    ds = yt.load("InteractingJets/jet_000002")
 
-For simulations without units (i.e., OPT__UNIT = 0), you can supply conversions for
-length, time, and mass to ``load`` using the ``units_override`` functionality:
+For simulations without units (i.e., ``OPT__UNIT = 0``), you can supply conversions
+for length, time, and mass to ``load`` using the ``units_override`` 
+functionality:
 
 .. code-block:: python
 
@@ -1331,14 +1550,16 @@ length, time, and mass to ``load`` using the ``units_override`` functionality:
                   "mass_unit"  :(1.4690033e+36,"g") }
    ds = yt.load("InteractingJets/jet_000002", units_override=code_units)
 
-This means that the yt fields, e.g., ``("gas","density")``, will be in cgs units, but the GAMER fields,
-e.g., ``("gamer","Dens")``, will be in code units.
+This means that the yt fields, e.g., ``("gas","density")``, will be in cgs units, 
+but the GAMER fields, e.g., ``("gamer","Dens")``, will be in code units.
 
-Particle data are supported and are always stored in the same file as the grid data.
+Particle data are supported and are always stored in the same file as the grid 
+data.
 
 .. rubric:: Caveats
 
-* GAMER data in raw binary format (i.e., OPT__OUTPUT_TOTAL = C-binary) is not supported.
+* GAMER data in raw binary format (i.e., ``OPT__OUTPUT_TOTAL = "C-binary"``) is not
+  supported.
 
 .. _loading-amr-data:
 
@@ -1595,7 +1816,7 @@ To load multiple meshes, you can do:
    sl = yt.SlicePlot(ds, 'z', ('all', 'test'))
 
 Note that you must respect the field naming convention that fields on the first
-mesh will have the type 'connect1', fields on the second will have 'connect2', etc...
+mesh will have the type ``connect1``, fields on the second will have ``connect2``, etc...
 
 .. rubric:: Caveats
 
@@ -1654,6 +1875,41 @@ The ``load_particles`` function also accepts the following keyword parameters:
 ``bbox``
        The bounding box for the particle positions.
 
+A novel use of the ``load_particles`` function is to facilitate SPH
+visualization of non-SPH particles. See the example below:
+
+.. code-block:: python
+
+    import yt
+
+    # Load dataset and center on the dense region
+    ds = yt.load('FIRE_M12i_ref11/snapshot_600.hdf5')
+    _, center = ds.find_max(('PartType0', 'density'))
+
+    # Reload DM particles into a stream dataset
+    ad = ds.all_data()
+    pt = 'PartType1'
+    fields = ['particle_mass'] + [f'particle_position_{ax}' for ax in 'xyz']
+    data = {field: ad[pt, field] for field in fields}
+    ds_dm = yt.load_particles(data, data_source=ad)
+
+    # Generate the missing SPH fields
+    ds_dm.add_sph_fields()
+
+    # Make the SPH projection plot
+    p = yt.ProjectionPlot(ds_dm, 'z', ('io', 'density'),
+                          center=center, width=(1, 'Mpc'))
+    p.set_unit('density', 'Msun/kpc**2')
+    p.show()
+
+Here we see two new things. First, ``load_particles`` accepts a ``data_source``
+argument to infer parameters like code units, which could be tedious to provide
+otherwise. Second, the returned
+:class:`~yt.frontends.stream.data_structures.StreamParticleDataset` has an
+:meth:`~yt.frontends.stream.data_structures.StreamParticleDataset.add_sph_fields`
+method, to create the ``smoothing_length`` and ``density`` fields required for
+SPH visualization to work.
+
 .. _loading-gizmo-data:
 
 Gizmo Data
@@ -1697,18 +1953,93 @@ Gadget outputs.  See :ref:`loading-gadget-data` for more information.
 Halo Catalog Data
 -----------------
 
-yt has support for reading halo catalogs produced by the Amiga Halo Finder (AHF), Rockstar and the inline
-FOF/SUBFIND halo finders of Gadget and OWLS.  The halo catalogs are treated as
-particle datasets where each particle represents a single halo.  For example,
-this means that the `particle_mass` field refers to the mass of the halos.  For
-Gadget FOF/SUBFIND catalogs, the member particles for a given halo can be
-accessed by creating `halo` data containers.  See :ref:`halo_containers` for
-more information.
+yt has support for reading halo catalogs produced by the AdaptaHOP, Amiga Halo
+Finder (AHF), Rockstar and the inline FOF/SUBFIND halo finders of Gadget and
+OWLS.  The halo catalogs are treated as particle datasets where each particle
+represents a single halo.  For example, this means that the `particle_mass`
+field refers to the mass of the halos.  For Gadget FOF/SUBFIND catalogs, the
+member particles for a given halo can be accessed by creating `halo` data
+containers.  See :ref:`halo_containers` for more information.
 
 If you have access to both the halo catalog and the simulation snapshot from
 the same redshift, additional analysis can be performed for each halo using
 :ref:`halo_catalog`.  The resulting product can be reloaded in a similar manner
 to the other halo catalogs shown here.
+
+.. _adaptahop:
+
+AdataHOP
+^^^^^^^^
+
+`AdaptaHOP <https://ascl.net/1305.004>`_ halo catalogs are loaded by providing
+the path to the `tree_bricksXXX` file. As the halo catalog does not contain
+all the information about the simulation (for example the cosmological
+parameters), you also need to pass the parent dataset for it to load correctly.
+Some fields of note available from AdaptaHOP are:
+
++---------------------+---------------------------+
+| Rockstar field      | yt field name             |
++=====================+===========================+
+| halo id             | particle_identifier       |
++---------------------+---------------------------+
+| halo mass           | particle_mass             |
++---------------------+---------------------------+
+| virial mass         | virial_mass               |
++---------------------+---------------------------+
+| virial radius       | virial_radius             |
++---------------------+---------------------------+
+| virial temperature  | virial_temperature        |
++---------------------+---------------------------+
+| halo position       | particle_position_(x,y,z) |
++---------------------+---------------------------+
+| halo velocity       | particle_velocity_(x,y,z) |
++---------------------+---------------------------+
+
+Numerous other AdataHOP fields exist.  To see them, check the field list by
+typing `ds.field_list` for a dataset loaded as `ds`.  Like all other datasets,
+fields must be accessed through :ref:`Data-objects`.
+
+.. code-block:: python
+
+   import yt
+   parent_ds = yt.load("output_00080/info_00080.txt")
+   ds = yt.load("output_00080_halos/tree_bricks080", parent_ds=parent_ds)
+   ad = ds.all_data()
+   # halo masses
+   print(ad["halos", "particle_mass"])
+   # halo radii
+   print(ad["halos", "virial_radius"])
+
+Halo Data Containers
+""""""""""""""""""""
+
+Halo member particles are accessed by creating halo data containers with the
+the halo id and the type of the particles.  Scalar values for halos
+can be accessed in the same way.  Halos also have mass, position, velocity, and
+member ids attributes.
+
+.. code-block:: python
+
+   halo = ds.halo(1, ptype='io')
+   # member particles for this halo
+   print(halo.member_ids)
+   # masses of the halo particles
+   print(halo["io", "particle_mass"])
+   # halo mass
+   print(halo.mass)
+
+In addition, the halo container contains a sphere container. This is the smallest
+sphere that contains all the halos' particles
+
+.. code-block:: python
+
+  halo = ds.halo(1, ptype='io')
+  sp = halo.sphere
+  # Density in halo
+  sp['gas', 'density']
+  # Entropy in halo
+  sp['gas', 'entropy']
+
 
 .. _ahf:
 
@@ -1849,7 +2180,7 @@ underscore and the index.
 .. _halo_containers:
 
 Halo Data Containers
-^^^^^^^^^^^^^^^^^^^^
+""""""""""""""""""""
 
 Halo member particles are accessed by creating halo data containers with the
 type of halo ("Group" or "Subhalo") and the halo id.  Scalar values for halos
@@ -1895,8 +2226,8 @@ information.  At this time, halo member particles cannot be loaded.
 
 .. _halocatalog:
 
-HaloCatalog
-^^^^^^^^^^^
+YTHaloCatalog
+^^^^^^^^^^^^^
 
 These are catalogs produced by the analysis discussed in :ref:`halo_catalog`.
 In the case where multiple files were produced, one need only provide the path
@@ -1921,17 +2252,36 @@ available here are similar to other catalogs.  Any addition
 .. code-block:: python
 
    import yt
-   ds = yt.load("catalogs/catalog.0.h5")
+   ds = yt.load("tiny_fof_halos/DD0046/DD0046.0.h5")
    ad = ds.all_data()
    # The halo mass
    print(ad["halos", "particle_mass"])
+
+Halo Data Containers
+""""""""""""""""""""
+
+Halo particles can be accessed by creating halo data containers with the
+type of halo ("halos") and the halo id and then querying the "member_ids"
+field. Halo containers have mass, radius, position, and velocity
+attributes. Additional fields for which there will be one value per halo
+can be accessed in the same manner as conventional data containers.
+
+.. code-block:: python
+
+   halo = ds.halo("halos", 0)
+   # particles for this halo
+   print(halo["member_ids"])
+   # halo properties
+   print(halo.mass, halo.radius, halo.position, halo.velocity)
+   # any other fields
+   print(halo[<field>])
 
 .. _loading-openpmd-data:
 
 openPMD Data
 ------------
 
-`openPMD <http://www.openpmd.org>`_ is an open source meta-standard and naming
+`openPMD <https://www.openpmd.org>`_ is an open source meta-standard and naming
 scheme for mesh based data and particle data. It does not actually define a file
 format.
 
@@ -1985,7 +2335,7 @@ PyNE Data
 `PyNE <http://pyne.io/>`_ is an open source nuclear engineering toolkit
 maintained by the PyNE development team (pyne-dev@googlegroups.com).
 PyNE meshes utilize the Mesh-Oriented datABase
-`(MOAB) <http://trac.mcs.anl.gov/projects/ITAPS/wiki/MOAB/>`_ and can be
+`(MOAB) <https://press3.mcs.anl.gov/sigma/moab-library/>`_ and can be
 Cartesian or tetrahedral. In addition to field data, pyne meshes store pyne
 Material objects which provide a rich set of capabilities for nuclear
 engineering tasks. PyNE Cartesian (Hex8) meshes are supported by yt.
@@ -2153,6 +2503,33 @@ It is possible to provide extra arguments to the load function when loading RAMS
          The ``bbox`` feature is only available for datasets using
          Hilbert ordering.
 
+``max_level, max_level_convention``
+      This will set the deepest level to be read from file. Both arguments
+      have to be set, where the convention can be either "ramses" or "yt".
+
+      In the "ramses" convention, levels go from 1 (the root grid)
+      to levelmax, such that the finest cells have a size of ``boxsize/2**levelmax``.
+      In the "yt" convention, levels are numbered from 0 (the coarsest
+      uniform grid at RAMSES' ``levelmin``) to ``max_level``, such that 
+      the finest cells are ``2**max_level`` smaller than the coarsest.
+
+
+      .. code-block:: python
+
+          import yt
+
+          # Assuming RAMSES' levelmin=6, i.e. the structure is full
+          # down to levelmin=6
+          ds_all = yt.load('output_00080/info_00080.txt')
+          ds_yt = yt.load('output_00080/info_00080.txt', max_level=2, max_level_convention="yt")
+          ds_ramses = yt.load('output_00080/info_00080.txt', max_level=8, max_level_convention="ramses")
+
+          any(ds_all.r['index', 'grid_level'] > 2) # True
+          all(ds_yt.r['index', 'grid_level'] <= 2) # True
+          all(ds_ramses.r['index', 'grid_level'] <= 2) # True
+
+
+
 Adding custom particle fields
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -2215,7 +2592,7 @@ There are three way to make yt detect all the particle fields. For example, if y
 Customizing the particle type association
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In verions of RAMSES more recent than December 2017, particles carry
+In versions of RAMSES more recent than December 2017, particles carry
 along a ``family`` array. The value of this array gives the kind of
 the particle, e.g. 1 for dark matter. It is possible to customize the
 association between particle type and family by customizing the yt
@@ -2263,7 +2640,7 @@ of the various particle formation time and age fields:
 
 +------------------+--------------------------+--------------------------------+
 | Simulation type  | Field name               | Description                    |
-|==================+==========================+================================+
++==================+==========================+================================+
 | cosmological     | ``conformal_birth_time`` | Formation time in conformal    |
 |                  |                          | units (dimensionless)          |
 +------------------+--------------------------+--------------------------------+
@@ -2312,7 +2689,7 @@ stars might look like this:
 
 For a cosmological simulation, this filter will distinguish between stars and
 dark matter particles.
-        
+
 .. _loading-sph-data:
 
 SPH Particle Data
@@ -2374,11 +2751,11 @@ parameters:
 If you wish to set the unit system directly, you can do so by using the
 ``unit_base`` keyword in the load statement.
 
- .. code-block:: python
+.. code-block:: python
 
-    import yt
+   import yt
 
-    ds = yt.load(filename, unit_base={'length', (1.0, 'Mpc')})
+   ds = yt.load(filename, unit_base={'length', (1.0, 'Mpc')})
 
 See the documentation for the
 :class:`~yt.frontends.tipsy.data_structures.TipsyDataset` class for more
@@ -2392,7 +2769,7 @@ use keyword ``cosmology_parameters`` when loading your data set to indicate to
 yt that it is a cosmological data set. If you do not wish to set any
 non-default cosmological parameters, you may pass an empty dictionary.
 
- .. code-block:: python
+.. code-block:: python
 
-    import yt
-    ds = yt.load(filename, cosmology_parameters={})
+   import yt
+   ds = yt.load(filename, cosmology_parameters={})

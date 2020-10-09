@@ -6,13 +6,6 @@ Definitions for image samplers
 
 """
 
-#-----------------------------------------------------------------------------
-# Copyright (c) 2016, yt Development Team.
-#
-# Distributed under the terms of the Modified BSD License.
-#
-# The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
 
 import numpy as np
 cimport numpy as np
@@ -60,6 +53,7 @@ cdef class ImageSampler:
     cdef void *supp_data
     cdef np.float64_t width[3]
     cdef public object lens_type
+    cdef public str volume_method
     cdef calculate_extent_function *extent_function
     cdef generate_vector_info_function *vector_function
     cdef void setup(self, PartitionedGrid pg)

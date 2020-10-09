@@ -9,7 +9,7 @@ of simulation data, derived fields, and the data produced by yt
 analysis objects.  For details about the data extraction and
 algorithms used to produce the image and analysis data, please see the
 yt `method paper
-<http://adsabs.harvard.edu/abs/2011ApJS..192....9T>`_.  There are also
+<https://ui.adsabs.harvard.edu/abs/2011ApJS..192....9T>`_.  There are also
 many example scripts in :ref:`cookbook`.
 
 The :class:`~yt.visualization.plot_window.PlotWindow` interface is useful for
@@ -61,8 +61,8 @@ of fixed size. This is accomplished behind the scenes using
 
 The :class:`~yt.visualization.plot_window.PlotWindow` class exposes the
 underlying matplotlib
-`figure <http://matplotlib.org/api/figure_api.html#matplotlib.figure.Figure>`_
-and `axes <http://matplotlib.org/api/axes_api.html#matplotlib.axes.Axes>`_
+`figure <https://matplotlib.org/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure>`_
+and `axes <https://matplotlib.org/api/axes_api.html#matplotlib.axes.Axes>`_
 objects, making it easy to customize your plots and
 add new annotations.  See :ref:`matplotlib-customization` for more information.
 
@@ -159,6 +159,14 @@ where for the last two objects any spatial field, such as ``"density"``,
 ``"velocity_z"``,
 etc., may be used, e.g. ``center=("min","temperature")``.
 
+The effective resolution of the plot (i.e. the number of resolution elements
+in the image itself) can be controlled with the ``buff_size`` argument:
+
+.. code-block:: python
+
+    yt.SlicePlot(ds, 'z', 'density', buff_size=(1000, 1000))
+
+
 Here is an example that combines all of the options we just discussed.
 
 .. python-script::
@@ -167,7 +175,7 @@ Here is an example that combines all of the options we just discussed.
    from yt.units import kpc
    ds = yt.load("IsolatedGalaxy/galaxy0030/galaxy0030")
    slc = yt.SlicePlot(ds, 'z', 'density', center=[0.5, 0.5, 0.5],
-                      width=(20,'kpc'))
+                      width=(20,'kpc'), buff_size=(1000, 1000))
    slc.save()
 
 The above example will display an annotated plot of a slice of the
@@ -275,11 +283,12 @@ example:
    from yt.units import kpc
    ds = yt.load("IsolatedGalaxy/galaxy0030/galaxy0030")
    prj = yt.ProjectionPlot(ds, 2, 'temperature', width=25*kpc,
-                           weight_field='density')
+                           weight_field='density', buff_size=(1000, 1000))
    prj.save()
 
-will create a density-weighted projection of the temperature field along the x
-axis, plot it, and then save the plot to a png image file.
+will create a density-weighted projection of the temperature field along 
+the x axis with 1000 resolution elements per side, plot it, and then save 
+the plot to a png image file.
 
 Like :ref:`slice-plots`, annotations and modifications can be applied
 after creating the ``ProjectionPlot`` object.  Annotations are
@@ -770,8 +779,8 @@ from black to white depending on the AMR level of the grid.
 
 Annotations are described in :ref:`callbacks`.
 
-Set the size of the plot
-~~~~~~~~~~~~~~~~~~~~~~~~
+Set the size and resolution of the plot
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To set the size of the plot, use the
 :meth:`~yt.visualization.plot_window.AxisAlignedSlicePlot.set_figure_size` function.  The argument
@@ -797,6 +806,9 @@ To change the resolution of the image, call the
    slc.set_buff_size(1600)
    slc.save()
 
+Also see cookbook recipe :ref:`image-resolution-primer` for more information
+about the parameters that determine the resolution of your images.
+
 Turning off minorticks
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -805,7 +817,7 @@ The minorticks may be removed using the
 :meth:`~yt.visualization.plot_window.AxisAlignedSlicePlot.set_minorticks`
 function, which either accepts a specific field name including the 'all' alias
 and the desired state for the plot as 'on' or 'off'. There is also an analogous
-:meth:`~yt.visualization.plot_window.AxisAlignedSlicePlot.set_cbar_minorticks`
+:meth:`~yt.visualization.plot_window.AxisAlignedSlicePlot.set_colorbar_minorticks`
 function for the colorbar axis.
 
 .. python-script::
@@ -813,8 +825,8 @@ function for the colorbar axis.
    import yt
    ds = yt.load("IsolatedGalaxy/galaxy0030/galaxy0030")
    slc = yt.SlicePlot(ds, 'z', 'density', width=(10,'kpc'))
-   slc.set_minorticks('all', 'off')
-   slc.set_cbar_minorticks('all', 'off')
+   slc.set_minorticks('all', False)
+   slc.set_colorbar_minorticks('all', False)
    slc.save()
 
 
@@ -837,8 +849,8 @@ accessed via the ``plots`` dictionary attached to each
 In this example ``dens_plot`` is an instance of
 :class:`~yt.visualization.plot_window.WindowPlotMPL`, an object that wraps the
 matplotlib
-`figure <http://matplotlib.org/api/figure_api.html#matplotlib.figure.Figure>`_
-and `axes <http://matplotlib.org/api/axes_api.html#matplotlib.axes.Axes>`_
+`figure <https://matplotlib.org/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure>`_
+and `axes <https://matplotlib.org/api/axes_api.html#matplotlib.axes.Axes>`_
 objects.  We can access these matplotlib primitives via attributes of
 ``dens_plot``.
 
@@ -849,8 +861,8 @@ objects.  We can access these matplotlib primitives via attributes of
     colorbar_axes = dens_plot.cax
 
 These are the
-`figure <http://matplotlib.org/api/figure_api.html#matplotlib.figure.Figure>`_
-and `axes <http://matplotlib.org/api/axes_api.html#matplotlib.axes.Axes>`_
+`figure <https://matplotlib.org/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure>`_
+and `axes <https://matplotlib.org/api/axes_api.html#matplotlib.axes.Axes>`_
 objects that control the actual drawing of the plot.  Arbitrary plot
 customizations are possible by manipulating these objects.  See
 :ref:`matplotlib-primitives` for an example.
@@ -1795,7 +1807,7 @@ visualize your data, publishers often require figures to be in PDF or
 EPS format.  While the matplotlib supports vector graphics and image
 compression in PDF formats, it does not support compression in EPS
 formats.  The :class:`~yt.visualization.eps_writer.DualEPS` module
-provides an interface with the `PyX <http://pyx.sourceforge.net/>`_,
+provides an interface with the `PyX <https://pyx-project.org/>`_,
 which is a Python abstraction of the PostScript drawing model with a
 LaTeX interface.  It is optimal for publications to provide figures
 with vector graphics to avoid rasterization of the lines and text,
@@ -1823,7 +1835,7 @@ EPS or PDF figure.  For example,
 
 The ``eps_fig`` object exposes all of the low-level functionality of
 ``PyX`` for further customization (see the `PyX documentation
-<http://pyx.sourceforge.net/manual/index.html>`_).  There are a few
+<https://pyx-project.org/manual/>`_).  There are a few
 convenience routines in ``eps_writer``, such as drawing a circle,
 
 .. code-block:: python
